@@ -24,6 +24,29 @@ public:
   virtual void change_speed(double& ref_vel) = 0;
   //virtual void changeState(int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion) = 0;
   vector<int> next_valid_states_;
+  std::tuple<double, double> getClosestCar(int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion){
+    double vel = 49;
+    double dist = 1000;
+    for (auto different_car : sensor_fusion)
+    {
+      float d = different_car[6];
+      if ((d < 2 + 4 * lane_ + 2) && (d > 2 + 4 * lane_ - 2))
+      { //each line is 4 meters if it's in my lane
+        double oc_speed_x = different_car[3];
+        double oc_speed_y = different_car[4];
+        double check_speed = sqrt(oc_speed_x * oc_speed_x + oc_speed_y * oc_speed_y);
+        double check_car_s = different_car[5];
+        check_car_s += (double) prev_size * 0.02 * check_speed;
+        if (check_car_s > car_s && check_car_s-car_s < dist) {
+          dist = check_car_s - car_s;
+          vel = check_speed
+        }
+
+
+      }
+    }
+    return std::make_tuple(dist, vel);
+  }
   bool is_lane_free(int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion){
     for (auto different_car : sensor_fusion)
     {
@@ -87,7 +110,7 @@ public:
   PrepareTurn(double max_vel){
     std::cout<<"prepare turn"<<std::endl;
     id_ = 2;
-    next_valid_states_ = {0,1,2};
+    next_valid_states_ = {1,2};
 
     max_vel_ = max_vel;
     acc_ = 0.224;
@@ -118,8 +141,6 @@ public:
 void changeState(int prev_size, double car_s, double car_d,  const std::vector<std::vector<double>>& sensor_fusion,  std::shared_ptr<State>& car_state){
   auto next_valid_states = car_state->next_valid_states_;
   int lane = car_state->lane_;
-    //for (int state: next_valid_states){
-    std::cout<<car_d<<" "<<lane<<std::endl;
 
   if(std::find(next_valid_states.begin(), next_valid_states.end(), 0) != next_valid_states.end()){
         if ((car_d<2+4*lane+2) && (car_d > 2+4*lane-2)) { //if car is on its lane
@@ -164,6 +185,11 @@ void changeState(int prev_size, double car_s, double car_d,  const std::vector<s
 
     if(std::find(next_valid_states.begin(), next_valid_states.end(), 2) != next_valid_states.end()){
         if(car_state->id_ != 2) car_state.reset(new PrepareTurn(car_state->max_vel_));
+        else{
+          auto closest_car = getClosestCar(lane, prev_size, car_s, sensor_fusion);
+          if (std::get<0>(closest_car) 120) car_state.reset(new GoStraight())
+          else car_state.speed = std::get<1>(closest_car);
+        }
   }
   }
 
