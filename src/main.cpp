@@ -8,10 +8,168 @@
 #include "helpers.h"
 #include "json.hpp"
 #include "spline.h"
+#include "memory.h"
 // for convenience
 using nlohmann::json;
 using std::string;
 using std::vector;
+
+class State{
+public:
+
+
+  static int lane_;
+  double max_vel_, acc_;
+  int id_;
+  virtual void change_speed(double& ref_vel) = 0;
+  //virtual void changeState(int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion) = 0;
+  vector<int> next_valid_states_;
+  bool is_lane_free(int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion){
+    for (auto different_car : sensor_fusion)
+    {
+      float d = different_car[6];
+      if ((d < 2 + 4 * lane_ + 2) && (d > 2 + 4 * lane_ - 2))
+      { //each line is 4 meters if it's in my lane
+        double oc_speed_x = different_car[3];
+        double oc_speed_y = different_car[4];
+        double check_speed = sqrt(oc_speed_x * oc_speed_x + oc_speed_y * oc_speed_y);
+        double check_car_s = different_car[5];
+        check_car_s += (double) prev_size * 0.02 * check_speed;
+        if ((check_car_s > car_s) && (check_car_s - car_s < 30))
+        {
+          max_vel_ = check_speed;
+          return false;
+        }
+
+      }
+    }
+    return true;
+  }
+
+  bool is_lane_free_overtake(int lane, int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion){
+    for (auto different_car : sensor_fusion)
+    {
+      float d = different_car[6];
+      if ((d < 2 + 4 * lane + 2) && (d > 2 + 4 * lane - 2))
+      { //each line is 4 meters if it's in my lane
+        double oc_speed_x = different_car[3];
+        double oc_speed_y = different_car[4];
+        double check_speed = sqrt(oc_speed_x * oc_speed_x + oc_speed_y * oc_speed_y);
+        double check_car_s = different_car[5];
+        check_car_s += (double) prev_size * 0.02 * check_speed;
+        if ((check_car_s - car_s > -10) && (check_car_s - car_s < 90))
+        {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+};
+int State::lane_ = 1;
+class GoStraight : public State{
+public:
+  GoStraight(){
+    std::cout<<"go straight"<<std::endl;
+
+    id_ = 0;
+    next_valid_states_ = {0,1,2};
+    max_vel_ = 49;
+    acc_ = 0.224;
+  }
+  virtual void change_speed(double& ref_vel){
+    if (ref_vel < max_vel_) ref_vel += acc_;
+  }
+};
+
+class PrepareTurn : public State{
+public:
+  PrepareTurn(double max_vel){
+    std::cout<<"prepare turn"<<std::endl;
+    id_ = 2;
+    next_valid_states_ = {0,1,2};
+
+    max_vel_ = max_vel;
+    acc_ = 0.224;
+  }
+  virtual void change_speed(double& ref_vel){
+    ref_vel = (ref_vel >= max_vel_) ? ref_vel - acc_ : ref_vel + acc_;
+  }
+};
+
+  class Turn : public State{
+  public:
+    Turn(){
+      std::cout<<"turn"<<std::endl;
+
+      id_ = 1;
+      next_valid_states_ = {0,1};
+
+      max_vel_ = 49;
+      acc_ = 0.124;
+    }
+    virtual void change_speed(double& ref_vel){
+      if (ref_vel < max_vel_) ref_vel += acc_;
+    }
+
+};
+
+
+void changeState(int prev_size, double car_s, double car_d,  const std::vector<std::vector<double>>& sensor_fusion,  std::shared_ptr<State>& car_state){
+  auto next_valid_states = car_state->next_valid_states_;
+  int lane = car_state->lane_;
+    //for (int state: next_valid_states){
+    std::cout<<car_d<<" "<<lane<<std::endl;
+
+  if(std::find(next_valid_states.begin(), next_valid_states.end(), 0) != next_valid_states.end()){
+        if ((car_d<2+4*lane+2) && (car_d > 2+4*lane-2)) { //if car is on its lane
+          if (car_state->is_lane_free(prev_size, car_s, sensor_fusion)){
+            if (car_state->id_ != 0) car_state.reset(new GoStraight());
+            return;
+          }
+    }
+  }
+  if(std::find(next_valid_states.begin(), next_valid_states.end(), 1) != next_valid_states.end()){
+  if(car_state->id_ == 1) return;
+    bool lane_changed = false;
+    if(lane == 0){
+        if (car_state->is_lane_free_overtake(1, prev_size, car_s, sensor_fusion)) {
+          lane = 1;
+          lane_changed = true;
+        }
+      }
+    else if(lane == 1){
+        if (car_state->is_lane_free_overtake(2, prev_size, car_s, sensor_fusion)) {
+          lane = 2;
+          lane_changed = true;
+        }
+        else if(car_state->is_lane_free_overtake(0, prev_size, car_s, sensor_fusion))
+        { lane = 0;
+          lane_changed = true;
+        }
+      }
+      else{
+        if (car_state->is_lane_free_overtake(1, prev_size, car_s, sensor_fusion))
+        {lane = 1;
+          lane_changed = true;
+        }
+      }
+      if(lane_changed){
+        car_state->lane_ = lane;
+        car_state.reset(new Turn());
+        return;
+      }
+
+    }
+
+    if(std::find(next_valid_states.begin(), next_valid_states.end(), 2) != next_valid_states.end()){
+        if(car_state->id_ != 2) car_state.reset(new PrepareTurn(car_state->max_vel_));
+  }
+  }
+
+
+
+
 
 int main()
 {
@@ -54,10 +212,10 @@ int main()
   double acc = 0.224;
   double ref_vel = 0;
   double max_vel = 49;
-  int lane = 1;
-
+  std::shared_ptr<State> car_state = std::shared_ptr<State>(new GoStraight());
+  car_state->lane_ = 1;
   h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
-                      &map_waypoints_dx, &map_waypoints_dy, &lane, &acc, &max_vel, &ref_vel]
+                      &map_waypoints_dx, &map_waypoints_dy, &acc, &max_vel, &ref_vel, &car_state]
                       (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                        uWS::OpCode opCode)
               {
@@ -107,35 +265,17 @@ int main()
                         car_s = end_path_s;
                       }
 
-                      bool too_close = false;
-
-                      for (auto different_car : sensor_fusion)
-                      {
-                        float d = different_car[6];
-                        if ((d < 2 + 4 * lane + 2) && (d > 2 + 4 * lane - 2))
-                        { //each line is 4 meters if it's in my lane
-                          double oc_speed_x = different_car[3];
-                          double oc_speed_y = different_car[4];
-                          double check_speed = sqrt(oc_speed_x * oc_speed_x + oc_speed_y * oc_speed_y);
-                          double check_car_s = different_car[5];
-                          check_car_s += (double) prev_size * 0.02 * check_speed;
-                          if ((check_car_s > car_s) && (check_car_s - car_s < 30))
-                          {
-                            too_close = true;
-                          }
-                        }
-                      }
-                      if (too_close)
-                      {
-                        ref_vel = (ref_vel >= acc) ? ref_vel - acc : acc;
-                      }
-                      else
-                      {
-                        if (ref_vel < max_vel) ref_vel += acc;
-                      }
-                      std::cout << "ref_vel " << ref_vel << std::endl;
+                      // bool too_close = false;
+                      // if (!is_lane_free(lane, prev_size,  car_s,sensor_fusion, car_state->max_vel_)){
+                      //     car_state = std::shared_ptr<State>(new PrepareTurn(car_state->max_vel_));
+                      // }
+                      changeState(prev_size, car_s, car_d, sensor_fusion,  car_state);
 
 
+
+                      car_state->change_speed(ref_vel);
+
+                      ///std::cout << "ref_vel " << ref_vel << std::endl;
 
 
 
@@ -171,11 +311,11 @@ int main()
                         ptsy.push_back(ref_y_prev);
                         ptsy.push_back(ref_y);
                       }
-                      auto next_wp0 = getXY(car_s + 30, (2 + 4 * lane), map_waypoints_s, map_waypoints_x,
+                      auto next_wp0 = getXY(car_s + 30, (2 + 4 * car_state->lane_), map_waypoints_s, map_waypoints_x,
                                             map_waypoints_y);
-                      auto next_wp1 = getXY(car_s + 60, (2 + 4 * lane), map_waypoints_s, map_waypoints_x,
+                      auto next_wp1 = getXY(car_s + 60, (2 + 4 * car_state->lane_), map_waypoints_s, map_waypoints_x,
                                             map_waypoints_y);
-                      auto next_wp2 = getXY(car_s + 90, (2 + 4 * lane), map_waypoints_s, map_waypoints_x,
+                      auto next_wp2 = getXY(car_s + 90, (2 + 4 * car_state->lane_), map_waypoints_s, map_waypoints_x,
                                             map_waypoints_y);
 
                       ptsx.push_back(next_wp0[0]);
