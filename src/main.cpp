@@ -22,7 +22,6 @@ public:
   double max_vel_, acc_;
   int id_;
   virtual void change_speed(double& ref_vel) = 0;
-  //virtual void changeState(int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion) = 0;
   vector<int> next_valid_states_;
   std::tuple<double, double> getClosestCar(int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion){
     double vel = 49;
@@ -43,7 +42,7 @@ public:
         }
       }
     }
-    return std::make_tuple(dist, vel);
+    return std::make_tuple(dist, vel * 2.236936); //m/s to mph
   }
 
   bool is_lane_free(int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion){
@@ -59,7 +58,7 @@ public:
         check_car_s += (double) prev_size * 0.02 * check_speed;
         if ((check_car_s > car_s) && (check_car_s - car_s < 30))
         {
-          max_vel_ = check_speed;
+          max_vel_ = check_speed * 2.236936;
           return false;
         }
 
@@ -79,7 +78,7 @@ public:
         double check_speed = sqrt(oc_speed_x * oc_speed_x + oc_speed_y * oc_speed_y);
         double check_car_s = different_car[5];
         check_car_s += (double) prev_size * 0.02 * check_speed;
-        if ((check_car_s - car_s > -10) && (check_car_s - car_s < 90))
+        if ((check_car_s - car_s > -10) && (check_car_s - car_s < 45))
         {
           return false;
         }
@@ -92,8 +91,6 @@ int State::lane_ = 1;
 class GoStraight : public State{
 public:
   GoStraight(){
-    std::cout<<"go straight"<<std::endl;
-
     id_ = 0;
     next_valid_states_ = {0,1,2};
     max_vel_ = 49;
@@ -107,7 +104,6 @@ public:
 class PrepareTurn : public State{
 public:
   PrepareTurn(double max_vel){
-    std::cout<<"prepare turn"<<std::endl;
     id_ = 2;
     next_valid_states_ = {1,2};
 
@@ -122,8 +118,6 @@ public:
   class Turn : public State{
   public:
     Turn(){
-      std::cout<<"turn"<<std::endl;
-
       id_ = 1;
       next_valid_states_ = {0,1};
 
@@ -185,9 +179,9 @@ void changeState(int prev_size, double car_s, double car_d,  const std::vector<s
     if(std::find(next_valid_states.begin(), next_valid_states.end(), 2) != next_valid_states.end()){
         if(car_state->id_ != 2) car_state.reset(new PrepareTurn(car_state->max_vel_));
         else{
-          auto closest_car = getClosestCar(prev_size, car_s, sensor_fusion);
-          if (std::get<0>(closest_car) 120) car_state.reset(new GoStraight())
-          else car_state.speed = std::get<1>(closest_car);
+          auto closest_car = car_state->getClosestCar(prev_size, car_s, sensor_fusion);
+          if (std::get<0>(closest_car) > 120) {car_state.reset(new GoStraight());}
+          else {car_state->max_vel_ = std::get<1>(closest_car);}
         }
   }
   }
@@ -290,26 +284,14 @@ int main()
                         car_s = end_path_s;
                       }
 
-                      // bool too_close = false;
-                      // if (!is_lane_free(lane, prev_size,  car_s,sensor_fusion, car_state->max_vel_)){
-                      //     car_state = std::shared_ptr<State>(new PrepareTurn(car_state->max_vel_));
-                      // }
                       changeState(prev_size, car_s, car_d, sensor_fusion,  car_state);
-
-
 
                       car_state->change_speed(ref_vel);
 
-                      ///std::cout << "ref_vel " << ref_vel << std::endl;
-
-
-
-                      //if (car_speed < max_vel) ref_vel = car_speed + 5;
                       vector<double> ptsx, ptsy;
                       double ref_x = car_x;
                       double ref_y = car_y;
                       double ref_yaw = deg2rad(car_yaw);
-                      //  std::cout<<car_x<<" "<<car_y<<" "<<car_s<<"yaw: "<<car_yaw<<" s: "<<car_s<<std::endl;
                       if (prev_size < 2)
                       {
                         double prev_car_x = car_x - cos(car_yaw);
@@ -352,16 +334,10 @@ int main()
                       ptsy.push_back(next_wp2[1]);
 
                       //Shift to local car coordinates. Origin car is 0 angle
-
-                      //std::cout<<"ref: "<<ref_x<<" "<<ref_y<<" "<<ref_yaw<<" "<<std::endl;
                       for (int i = 0; i < ptsx.size(); i++)
                       {
                         double shift_x = ptsx[i] - ref_x;
                         double shift_y = ptsy[i] - ref_y;
-
-                        //std::cout<<ptsx[i]<<" "<<ptsy[i]<<std::endl;
-                        // std::cout<<"shift: "<<shift_x<<" "<<shift_y<<std::endl;
-                        // std::cout<<"points "<<i<<": "<<ptsx[i]<<" "<<ptsy[i]<<std::endl;
 
                         ptsx[i] = shift_x * cos(0 - ref_yaw) - shift_y * sin(0 - ref_yaw);
                         ptsy[i] = shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw);
@@ -377,7 +353,6 @@ int main()
 
                       for (int i = 0; i < previous_path_x.size(); i++)
                       {
-                        //std::cout<<previous_path_x[i]<< " ";
                         next_x_vals.push_back(previous_path_x[i]);
                         next_y_vals.push_back(previous_path_y[i]);
                       }
@@ -392,7 +367,6 @@ int main()
                       {
 
                         double N = target_dist / (0.02 * ref_vel / 2.24); //mph to m/sec
-                        //std::cout<<N<<std::endl;
                         double x_point = x_add_on + target_x / N;
                         double y_point = s(x_point);
                         x_add_on = x_point;
@@ -405,34 +379,10 @@ int main()
                         y_point = x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw);
                         x_point += ref_x;
                         y_point += ref_y;
-                        //std::cout<<x_point<<" "<<y_point<<" "<<ref_yaw<<std::endl;
 
                         next_x_vals.push_back(x_point);
                         next_y_vals.push_back(y_point);
                       }
-
-                      //
-                      //     vector<double> next_x_vals;
-                      //     vector<double> next_y_vals;
-                      //  double dist_inc = 0.5;
-                      // // next_x_vals.clear();
-                      // // next_x_vals.resize(50);
-                      // // next_y_vals.resize(50);
-                      // // next_y_vals.resize(50);
-                      // for (int i = 0 ;i <50; i++){
-                      //   double next_s = car_s + (i+1)*dist_inc;
-                      //   double next_d = 6;
-                      //   auto xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-                      //   // next_x_vals[i]= xy[0];
-                      //   // next_y_vals[i]= xy[1];
-                      //   std::cout<<xy[0]<<" "<<xy[1]<<std::endl;
-                      //
-                      // }
-                      /**
-                       * TODO: define a path made up of (x,y) points that the car will visit
-                       *   sequentially every .02 seconds
-                       */
-
 
                       msgJson["next_x"] = next_x_vals;
                       msgJson["next_y"] = next_y_vals;
