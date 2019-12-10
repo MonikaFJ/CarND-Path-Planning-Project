@@ -39,14 +39,13 @@ public:
         check_car_s += (double) prev_size * 0.02 * check_speed;
         if (check_car_s > car_s && check_car_s-car_s < dist) {
           dist = check_car_s - car_s;
-          vel = check_speed
+          vel = check_speed;
         }
-
-
       }
     }
     return std::make_tuple(dist, vel);
   }
+
   bool is_lane_free(int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion){
     for (auto different_car : sensor_fusion)
     {
@@ -186,7 +185,7 @@ void changeState(int prev_size, double car_s, double car_d,  const std::vector<s
     if(std::find(next_valid_states.begin(), next_valid_states.end(), 2) != next_valid_states.end()){
         if(car_state->id_ != 2) car_state.reset(new PrepareTurn(car_state->max_vel_));
         else{
-          auto closest_car = getClosestCar(lane, prev_size, car_s, sensor_fusion);
+          auto closest_car = getClosestCar(prev_size, car_s, sensor_fusion);
           if (std::get<0>(closest_car) 120) car_state.reset(new GoStraight())
           else car_state.speed = std::get<1>(closest_car);
         }
