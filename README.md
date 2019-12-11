@@ -1,6 +1,6 @@
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
-   
+
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases/tag/T3_v1.2).  
 
@@ -43,13 +43,13 @@ Here is the data provided from the Simulator to the C++ Program
 #### Previous path data given to the Planner
 
 //Note: Return the previous list but with processed points removed, can be a nice tool to show how far along
-the path has processed since last time. 
+the path has processed since last time.
 
 ["previous_path_x"] The previous list of x points previously given to the simulator
 
 ["previous_path_y"] The previous list of y points previously given to the simulator
 
-#### Previous path's end s and d values 
+#### Previous path's end s and d values
 
 ["end_path_s"] The previous list's last point's frenet s value
 
@@ -57,7 +57,7 @@ the path has processed since last time.
 
 #### Sensor Fusion Data, a list of all other car's attributes on the same side of the road. (No Noise)
 
-["sensor_fusion"] A 2d vector of cars and then that car's [car's unique ID, car's x position in map coordinates, car's y position in map coordinates, car's x velocity in m/s, car's y velocity in m/s, car's s position in frenet coordinates, car's d position in frenet coordinates. 
+["sensor_fusion"] A 2d vector of cars and then that car's [car's unique ID, car's x position in map coordinates, car's y position in map coordinates, car's x velocity in m/s, car's y velocity in m/s, car's s position in frenet coordinates, car's d position in frenet coordinates.
 
 ## Details
 
@@ -87,7 +87,7 @@ A really helpful resource for doing this project and creating smooth trajectorie
   * Run either `install-mac.sh` or `install-ubuntu.sh`.
   * If you install from source, checkout to commit `e94b6e1`, i.e.
     ```
-    git clone https://github.com/uWebSockets/uWebSockets 
+    git clone https://github.com/uWebSockets/uWebSockets
     cd uWebSockets
     git checkout e94b6e1
     ```
@@ -95,6 +95,8 @@ A really helpful resource for doing this project and creating smooth trajectorie
 ## Method description
 
 My approach to solve the issue in this chapter can be devided into two parts. First is to estimate in which state the car should be and the second is to plot smooth trajectory based on the estimated earlier goal velocity.
+
+![Alt text](success.png?raw=true "Car successfully driven over 4.32 miles")
 
 ### Choosing states
 
@@ -106,21 +108,21 @@ I've defined three different states:
 
 The transition between the states is straight forward. If it's possible the preferred state is to drive straight whenever possible. If it's not possible next try is always to turn. If turning is not possible it changes to 'Prepare to turn' state.
 
-Based on the state properties and current car velocity the goal car velocity is calculated. 
+Based on the state properties and current car velocity the goal car velocity is calculated.
 
 ### Calculate trajectory
 
 The trajectory is calculated based on the current trajectory, goal velocity and goal line.
 
-To ensure smooth transitions it uses previously generated trajectory and build upon it. The controller is always sending next 50 waypoints to the controller. 
+To ensure smooth transitions it uses previously generated trajectory and build upon it. The controller is always sending next 50 waypoints to the controller.
 
 Steps to generate the trajectory:
 
 1. Get 5 points that defines the road. First two are taken either from previous path or from current car position, next three are the closest waypoints to points that are 30, 60 and 90 m away from the car on the goal line.
 2. Convert points to local car coordinates.
 3. Calculate the spline base on these points.
-4. Calculate the step for getting the next trajectory points. To do it we have to calculate the distance that has to be 
-driven to get to the point that is 30m away in x direction (remember we are in car coordinates). The distance might be 
+4. Calculate the step for getting the next trajectory points. To do it we have to calculate the distance that has to be
+driven to get to the point that is 30m away in x direction (remember we are in car coordinates). The distance might be
 bigger than 30 m, because the car might also have to travel in y direction. To get the y travel distance the splice that
 was calculated earlier can be used. The step will be the difference divided by 0.02 (time step) and car velocity in m/s
 5. Calculate the next x position based on the step increase calculated in previous step. Next y position is calculated based on the spline.
@@ -129,10 +131,10 @@ was calculated earlier can be used. The step will be the difference divided by 0
 
 ## Possible improvements
 
-The presented approach is quite basic. It's safe and feasible but not flexible and quite conservative. 
+The presented approach is quite basic. It's safe and feasible but not flexible and quite conservative.
 There are multiple improvements to this approach e.q.:
 * Add check for safety of the maneuver during whole line change. Right now during the change line maneuver the speed of cars on the new lane is no longer monitored. It is not a problem in the simulation, since the car are not breaking the rules and the distances used to calculates if the maneuver is safe are big enough, but in real life the car in front might rapidly stop or the car behind might be driving 300 km/s.
 * Introduce real state machine. Method currently used in the project is extremely simplified version of the state machine which says that it's always best to drive straight if the lane is not occupied. This might fail e.g. when we have a goal line where the car should be. 
-* Try to always go back to right lane, to comply with the European drive rules. 
-* Calculate multiple trajectories with slightly different acceleration when checking for feasibility. Right now the car might get stuck behind two cars that are driving with similar speed, because the change line maneuver is always calculated with big safety values and very smooth transition. 
-* Refactor code. Move classes to different files, create functions from nested loops. 
+* Try to always go back to right lane, to comply with the European drive rules.
+* Calculate multiple trajectories with slightly different acceleration when checking for feasibility. Right now the car might get stuck behind two cars that are driving with similar speed, because the change line maneuver is always calculated with big safety values and very smooth transition.
+* Refactor code. Move classes to different files, create functions from nested loops.

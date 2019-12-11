@@ -224,7 +224,10 @@ void changeState(int prev_size, double car_s, double car_d, const std::vector<st
       if (std::get<0>(closest_car) > 120)
       { car_state.reset(new GoStraight()); }
       else
-      { car_state->max_vel_ = std::get<1>(closest_car); }
+      { if(std::get<0>(closest_car)<20)
+        car_state->max_vel_ = std::get<1>(closest_car)/2; //slow down even more when we are too close
+        else
+        car_state->max_vel_ = std::get<1>(closest_car); }
     }
   }
 }
@@ -386,7 +389,6 @@ int main()
                         ptsy[i] = shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw);
                       }
 
-
                       tk::spline s;
                       s.set_points(ptsx, ptsy);
                       vector<double> next_x_vals;
@@ -407,23 +409,21 @@ int main()
                       double x_add_on = 0;
 
                       double N = target_dist / (0.02 * ref_vel / 2.24); // 2.24-> mph to m/sec 0.02 -> timestamp
+                      double step = target_x / N;
                       for (int i = 1; i <= 50 - previous_path_x.size(); i++)
                       {
-                        double x_point = x_add_on + target_x / N;
-                        double y_point = s(x_point);
-                        x_add_on = x_point;
+                        double x_car = x_add_on + step;
+                        double y_car = s(x_car);
+                        x_add_on = x_car;
 
-                        double x_ref = x_point;
-                        double y_ref = y_point;
+                        //come back to map coordinate from car coordinates
+                        double x_map = x_car * cos(ref_yaw) - y_car * sin(ref_yaw);
+                        double y_map = x_car * sin(ref_yaw) + y_car * cos(ref_yaw);
+                        x_map += ref_x;
+                        y_map += ref_y;
 
-                        //come back to normal after rotating it car coordinate before
-                        x_point = x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw);
-                        y_point = x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw);
-                        x_point += ref_x;
-                        y_point += ref_y;
-
-                        next_x_vals.push_back(x_point);
-                        next_y_vals.push_back(y_point);
+                        next_x_vals.push_back(x_map);
+                        next_y_vals.push_back(y_map);
                       }
 
                       msgJson["next_x"] = next_x_vals;
