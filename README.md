@@ -92,54 +92,47 @@ A really helpful resource for doing this project and creating smooth trajectorie
     git checkout e94b6e1
     ```
 
-## Editor Settings
+## Method description
 
-We've purposefully kept editor configuration files out of this repo in order to
-keep it as simple and environment agnostic as possible. However, we recommend
-using the following settings:
+My approach to solve the issue in this chapter can be devided into two parts. First is to estimate in which state the car should be and the second is to plot smooth trajectory based on the estimated earlier goal velocity.
 
-* indent using spaces
-* set tab width to 2 spaces (keeps the matrices in source code aligned)
+### Choosing states
 
-## Code Style
+I've defined three different states:
 
-Please (do your best to) stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
+* Drive straight - the line is not changes, the max velocity is always 49 mph. Acceleration is 0.224. Possible state to which it can change: Drive straight, Turn, Prepare to turn
+* Turn - When the state changes in to 'Turn' state, lane is changes to left or right lane, whichever is free and feasible. Acceleration is 0.124  Possible state to which it can change: Turn, Drive straight
+* Prepare to turn - Slow down to speed of the car in front of you. It accelerates or decelerates with rate 0.224  Possible state to which it can change: Turn, Prepare to turn, Drive straight (only if there is no car in front)
 
-## Project Instructions and Rubric
+The transition between the states is straight forward. If it's possible the preferred state is to drive straight whenever possible. If it's not possible next try is always to turn. If turning is not possible it changes to 'Prepare to turn' state.
 
-Note: regardless of the changes you make, your project must be buildable using
-cmake and make!
+Based on the state properties and current car velocity the goal car velocity is calculated. 
+
+### Calculate trajectory
+
+The trajectory is calculated based on the current trajectory, goal velocity and goal line.
+
+To ensure smooth transitions it uses previously generated trajectory and build upon it. The controller is always sending next 50 waypoints to the controller. 
+
+Steps to generate the trajectory:
+
+1. Get 5 points that defines the road. First two are taken either from previous path or from current car position, next three are the closest waypoints to points that are 30, 60 and 90 m away from the car on the goal line.
+2. Convert points to local car coordinates.
+3. Calculate the spline base on these points.
+4. Calculate the step for getting the next trajectory points. To do it we have to calculate the distance that has to be 
+driven to get to the point that is 30m away in x direction (remember we are in car coordinates). The distance might be 
+bigger than 30 m, because the car might also have to travel in y direction. To get the y travel distance the splice that
+was calculated earlier can be used. The step will be the difference divided by 0.02 (time step) and car velocity in m/s
+5. Calculate the next x position based on the step increase calculated in previous step. Next y position is calculated based on the spline.
+6. Convert next x and y points back to map coordinates and store in the trajectory. The number of generated points depends on the steps that are left from previous trajectory. There should be in total 50 points (sum of not executed points from previous trajectory and new points)
 
 
-## Call for IDE Profiles Pull Requests
+## Possible improvements
 
-Help your fellow students!
-
-We decided to create Makefiles with cmake to keep this project as platform
-agnostic as possible. Similarly, we omitted IDE profiles in order to ensure
-that students don't feel pressured to use one IDE or another.
-
-However! I'd love to help people get up and running with their IDEs of choice.
-If you've created a profile for an IDE that you think other students would
-appreciate, we'd love to have you add the requisite profile files and
-instructions to ide_profiles/. For example if you wanted to add a VS Code
-profile, you'd add:
-
-* /ide_profiles/vscode/.vscode
-* /ide_profiles/vscode/README.md
-
-The README should explain what the profile does, how to take advantage of it,
-and how to install it.
-
-Frankly, I've never been involved in a project with multiple IDE profiles
-before. I believe the best way to handle this would be to keep them out of the
-repo root to avoid clutter. My expectation is that most profiles will include
-instructions to copy files to a new location to get picked up by the IDE, but
-that's just a guess.
-
-One last note here: regardless of the IDE used, every submitted project must
-still be compilable with cmake and make./
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-
+The presented approach is quite basic. It's safe and feasible but not flexible and quite conservative. 
+There are multiple improvements to this approach e.q.:
+* Add check for safety of the maneuver during whole line change. Right now during the change line maneuver the speed of cars on the new lane is no longer monitored. It is not a problem in the simulation, since the car are not breaking the rules and the distances used to calculates if the maneuver is safe are big enough, but in real life the car in front might rapidly stop or the car behind might be driving 300 km/s.
+* Introduce real state machine. Method currently used in the project is extremely simplified version of the state machine which says that it's always best to drive straight if the lane is not occupied. This might fail e.g. when we have a goal line where the car should be. 
+* Try to always go back to right lane, to comply with the European drive rules. 
+* Calculate multiple trajectories with slightly different acceleration when checking for feasibility. Right now the car might get stuck behind two cars that are driving with similar speed, because the change line maneuver is always calculated with big safety values and very smooth transition. 
+* Refactor code. Move classes to different files, create functions from nested loops. 

@@ -14,180 +14,220 @@ using nlohmann::json;
 using std::string;
 using std::vector;
 
-class State{
-public:
-
-
-  static int lane_;
-  double max_vel_, acc_;
-  int id_;
-  virtual void change_speed(double& ref_vel) = 0;
-  vector<int> next_valid_states_;
-  std::tuple<double, double> getClosestCar(int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion){
-    double vel = 49;
-    double dist = 1000;
-    for (auto different_car : sensor_fusion)
-    {
-      float d = different_car[6];
-      if ((d < 2 + 4 * lane_ + 2) && (d > 2 + 4 * lane_ - 2))
-      { //each line is 4 meters if it's in my lane
-        double oc_speed_x = different_car[3];
-        double oc_speed_y = different_car[4];
-        double check_speed = sqrt(oc_speed_x * oc_speed_x + oc_speed_y * oc_speed_y);
-        double check_car_s = different_car[5];
-        check_car_s += (double) prev_size * 0.02 * check_speed;
-        if (check_car_s > car_s && check_car_s-car_s < dist) {
-          dist = check_car_s - car_s;
-          vel = check_speed;
-        }
-      }
-    }
-    return std::make_tuple(dist, vel * 2.236936); //m/s to mph
-  }
-
-  bool is_lane_free(int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion){
-    for (auto different_car : sensor_fusion)
-    {
-      float d = different_car[6];
-      if ((d < 2 + 4 * lane_ + 2) && (d > 2 + 4 * lane_ - 2))
-      { //each line is 4 meters if it's in my lane
-        double oc_speed_x = different_car[3];
-        double oc_speed_y = different_car[4];
-        double check_speed = sqrt(oc_speed_x * oc_speed_x + oc_speed_y * oc_speed_y);
-        double check_car_s = different_car[5];
-        check_car_s += (double) prev_size * 0.02 * check_speed;
-        if ((check_car_s > car_s) && (check_car_s - car_s < 30))
-        {
-          max_vel_ = check_speed * 2.236936;
-          return false;
-        }
-
-      }
-    }
-    return true;
-  }
-
-  bool is_lane_free_overtake(int lane, int prev_size, double car_s, const std::vector<std::vector<double>>& sensor_fusion){
-    for (auto different_car : sensor_fusion)
-    {
-      float d = different_car[6];
-      if ((d < 2 + 4 * lane + 2) && (d > 2 + 4 * lane - 2))
-      { //each line is 4 meters if it's in my lane
-        double oc_speed_x = different_car[3];
-        double oc_speed_y = different_car[4];
-        double check_speed = sqrt(oc_speed_x * oc_speed_x + oc_speed_y * oc_speed_y);
-        double check_car_s = different_car[5];
-        check_car_s += (double) prev_size * 0.02 * check_speed;
-        if ((check_car_s - car_s > -10) && (check_car_s - car_s < 45))
-        {
-          return false;
-        }
-      }
-    }
-    return true;
-  }
-};
-int State::lane_ = 1;
-class GoStraight : public State{
-public:
-  GoStraight(){
-    id_ = 0;
-    next_valid_states_ = {0,1,2};
-    max_vel_ = 49;
-    acc_ = 0.224;
-  }
-  virtual void change_speed(double& ref_vel){
-    if (ref_vel < max_vel_) ref_vel += acc_;
-  }
-};
-
-class PrepareTurn : public State{
-public:
-  PrepareTurn(double max_vel){
-    id_ = 2;
-    next_valid_states_ = {1,2};
-
-    max_vel_ = max_vel;
-    acc_ = 0.224;
-  }
-  virtual void change_speed(double& ref_vel){
-    ref_vel = (ref_vel >= max_vel_) ? ref_vel - acc_ : ref_vel + acc_;
-  }
-};
-
-  class Turn : public State{
+class State
+{
   public:
-    Turn(){
+    static int lane_;
+    double max_vel_, acc_;
+    int id_;
+
+    virtual void calcNewSpeed(double &ref_vel) = 0;
+
+    vector<int> next_valid_states_;
+
+    std::tuple<double, double>
+    getClosestCar(int prev_size, double car_s, const std::vector<std::vector<double>> &sensor_fusion)
+    {
+      double vel = 49;
+      double dist = 1000;
+      for (auto different_car : sensor_fusion)
+      {
+        float d = different_car[6];
+        if ((d < 2 + 4 * lane_ + 2) && (d > 2 + 4 * lane_ - 2))
+        { //each line is 4 meters if it's in my lane
+          double oc_speed_x = different_car[3];
+          double oc_speed_y = different_car[4];
+          double check_speed = sqrt(oc_speed_x * oc_speed_x + oc_speed_y * oc_speed_y);
+          double check_car_s = different_car[5];
+          check_car_s += (double) prev_size * 0.02 * check_speed;
+          if (check_car_s > car_s && check_car_s - car_s < dist)
+          {
+            dist = check_car_s - car_s;
+            vel = check_speed;
+          }
+        }
+      }
+      return std::make_tuple(dist, vel * 2.236936); //m/s to mph
+    }
+
+    bool isLaneFree(int prev_size, double car_s, const std::vector<std::vector<double>> &sensor_fusion)
+    {
+      for (auto different_car : sensor_fusion)
+      {
+        float d = different_car[6];
+        if ((d < 2 + 4 * lane_ + 2) && (d > 2 + 4 * lane_ - 2))
+        { //each line is 4 meters if it's in my lane
+          double oc_speed_x = different_car[3];
+          double oc_speed_y = different_car[4];
+          double check_speed = sqrt(oc_speed_x * oc_speed_x + oc_speed_y * oc_speed_y);
+          double check_car_s = different_car[5];
+          check_car_s += (double) prev_size * 0.02 * check_speed;
+          if ((check_car_s > car_s) && (check_car_s - car_s < 30))
+          {
+            max_vel_ = check_speed * 2.236936;
+            return false;
+          }
+
+        }
+      }
+      return true;
+    }
+
+    bool
+    isLaneFreeOvertake(int lane, int prev_size, double car_s, const std::vector<std::vector<double>> &sensor_fusion)
+    {
+      for (auto different_car : sensor_fusion)
+      {
+        float d = different_car[6];
+        if ((d < 2 + 4 * lane + 2) && (d > 2 + 4 * lane - 2))
+        { //each line is 4 meters if it's in my lane
+          double oc_speed_x = different_car[3];
+          double oc_speed_y = different_car[4];
+          double check_speed = sqrt(oc_speed_x * oc_speed_x + oc_speed_y * oc_speed_y);
+          double check_car_s = different_car[5];
+          check_car_s += (double) prev_size * 0.02 * check_speed;
+          if ((check_car_s - car_s > -10) && (check_car_s - car_s < 45))
+          {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+
+};
+
+int State::lane_ = 1;
+
+class GoStraight : public State
+{
+  public:
+    GoStraight()
+    {
+      id_ = 0;
+      next_valid_states_ = {0, 1, 2};
+      max_vel_ = 49;
+      acc_ = 0.224;
+    }
+
+    virtual void calcNewSpeed(double &ref_vel)
+    {
+      if (ref_vel < max_vel_) ref_vel += acc_;
+    }
+};
+
+class PrepareTurn : public State
+{
+  public:
+    PrepareTurn(double max_vel)
+    {
+      id_ = 2;
+      next_valid_states_ = {1, 2};
+
+      max_vel_ = max_vel;
+      acc_ = 0.224;
+    }
+
+    virtual void calcNewSpeed(double &ref_vel)
+    {
+      ref_vel = (ref_vel >= max_vel_) ? ref_vel - acc_ : ref_vel + acc_;
+    }
+};
+
+class Turn : public State
+{
+  public:
+    Turn()
+    {
       id_ = 1;
-      next_valid_states_ = {0,1};
+      next_valid_states_ = {0, 1};
 
       max_vel_ = 49;
       acc_ = 0.124;
     }
-    virtual void change_speed(double& ref_vel){
+
+    virtual void calcNewSpeed(double &ref_vel)
+    {
       if (ref_vel < max_vel_) ref_vel += acc_;
     }
 
 };
 
 
-void changeState(int prev_size, double car_s, double car_d,  const std::vector<std::vector<double>>& sensor_fusion,  std::shared_ptr<State>& car_state){
+void changeState(int prev_size, double car_s, double car_d, const std::vector<std::vector<double>> &sensor_fusion,
+                 std::shared_ptr<State> &car_state)
+{
   auto next_valid_states = car_state->next_valid_states_;
   int lane = car_state->lane_;
 
-  if(std::find(next_valid_states.begin(), next_valid_states.end(), 0) != next_valid_states.end()){
-        if ((car_d<2+4*lane+2) && (car_d > 2+4*lane-2)) { //if car is on its lane
-          if (car_state->is_lane_free(prev_size, car_s, sensor_fusion)){
-            if (car_state->id_ != 0) car_state.reset(new GoStraight());
-            return;
-          }
-    }
-  }
-  if(std::find(next_valid_states.begin(), next_valid_states.end(), 1) != next_valid_states.end()){
-  if(car_state->id_ == 1) return;
-    bool lane_changed = false;
-    if(lane == 0){
-        if (car_state->is_lane_free_overtake(1, prev_size, car_s, sensor_fusion)) {
-          lane = 1;
-          lane_changed = true;
-        }
-      }
-    else if(lane == 1){
-        if (car_state->is_lane_free_overtake(2, prev_size, car_s, sensor_fusion)) {
-          lane = 2;
-          lane_changed = true;
-        }
-        else if(car_state->is_lane_free_overtake(0, prev_size, car_s, sensor_fusion))
-        { lane = 0;
-          lane_changed = true;
-        }
-      }
-      else{
-        if (car_state->is_lane_free_overtake(1, prev_size, car_s, sensor_fusion))
-        {lane = 1;
-          lane_changed = true;
-        }
-      }
-      if(lane_changed){
-        car_state->lane_ = lane;
-        car_state.reset(new Turn());
+  if (std::find(next_valid_states.begin(), next_valid_states.end(), 0) != next_valid_states.end())
+  {
+    if ((car_d < 2 + 4 * lane + 2) && (car_d > 2 + 4 * lane - 2))
+    { //if car is on its lane
+      if (car_state->isLaneFree(prev_size, car_s, sensor_fusion))
+      {
+        if (car_state->id_ != 0) car_state.reset(new GoStraight());
         return;
       }
-
+    }
+  }
+  if (std::find(next_valid_states.begin(), next_valid_states.end(), 1) != next_valid_states.end())
+  {
+    if (car_state->id_ == 1) return;
+    bool lane_changed = false;
+    if (lane == 0)
+    {
+      if (car_state->isLaneFreeOvertake(1, prev_size, car_s, sensor_fusion))
+      {
+        lane = 1;
+        lane_changed = true;
+      }
+    }
+    else if (lane == 1)
+    {
+      if (car_state->isLaneFreeOvertake(2, prev_size, car_s, sensor_fusion))
+      {
+        lane = 2;
+        lane_changed = true;
+      }
+      else if (car_state->isLaneFreeOvertake(0, prev_size, car_s, sensor_fusion))
+      {
+        lane = 0;
+        lane_changed = true;
+      }
+    }
+    else
+    {
+      if (car_state->isLaneFreeOvertake(1, prev_size, car_s, sensor_fusion))
+      {
+        lane = 1;
+        lane_changed = true;
+      }
+    }
+    if (lane_changed)
+    {
+      car_state->lane_ = lane;
+      car_state.reset(new Turn());
+      return;
     }
 
-    if(std::find(next_valid_states.begin(), next_valid_states.end(), 2) != next_valid_states.end()){
-        if(car_state->id_ != 2) car_state.reset(new PrepareTurn(car_state->max_vel_));
-        else{
-          auto closest_car = car_state->getClosestCar(prev_size, car_s, sensor_fusion);
-          if (std::get<0>(closest_car) > 120) {car_state.reset(new GoStraight());}
-          else {car_state->max_vel_ = std::get<1>(closest_car);}
-        }
-  }
   }
 
-
-
+  if (std::find(next_valid_states.begin(), next_valid_states.end(), 2) != next_valid_states.end())
+  {
+    if (car_state->id_ != 2)
+    { car_state.reset(new PrepareTurn(car_state->max_vel_)); }
+    else
+    {
+      auto closest_car = car_state->getClosestCar(prev_size, car_s, sensor_fusion);
+      if (std::get<0>(closest_car) > 120)
+      { car_state.reset(new GoStraight()); }
+      else
+      { car_state->max_vel_ = std::get<1>(closest_car); }
+    }
+  }
+}
 
 
 int main()
@@ -228,13 +268,11 @@ int main()
     map_waypoints_dx.push_back(d_x);
     map_waypoints_dy.push_back(d_y);
   }
-  double acc = 0.224;
   double ref_vel = 0;
-  double max_vel = 49;
   std::shared_ptr<State> car_state = std::shared_ptr<State>(new GoStraight());
   car_state->lane_ = 1;
   h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
-                      &map_waypoints_dx, &map_waypoints_dy, &acc, &max_vel, &ref_vel, &car_state]
+                      &map_waypoints_dx, &map_waypoints_dy, &ref_vel, &car_state]
                       (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                        uWS::OpCode opCode)
               {
@@ -284,15 +322,17 @@ int main()
                         car_s = end_path_s;
                       }
 
-                      changeState(prev_size, car_s, car_d, sensor_fusion,  car_state);
+                      changeState(prev_size, car_s, car_d, sensor_fusion, car_state);
 
-                      car_state->change_speed(ref_vel);
+                      car_state->calcNewSpeed(ref_vel);
+
 
                       vector<double> ptsx, ptsy;
                       double ref_x = car_x;
                       double ref_y = car_y;
                       double ref_yaw = deg2rad(car_yaw);
-                      if (prev_size < 2)
+
+                      if (prev_size < 2) //If the previous path is empty or almost empty we need to calculate two tangent points
                       {
                         double prev_car_x = car_x - cos(car_yaw);
                         double prev_car_y = car_y - sin(car_yaw);
@@ -305,6 +345,7 @@ int main()
                       }
                       else
                       {
+                        //If we have previous point we will start plotting the path at the end of old path
                         ref_x = previous_path_x[prev_size - 1];
                         ref_y = previous_path_y[prev_size - 1];
 
@@ -318,6 +359,8 @@ int main()
                         ptsy.push_back(ref_y_prev);
                         ptsy.push_back(ref_y);
                       }
+
+                      //Next points are waypoint that are approx 30, 60 and 90 m away from the car
                       auto next_wp0 = getXY(car_s + 30, (2 + 4 * car_state->lane_), map_waypoints_s, map_waypoints_x,
                                             map_waypoints_y);
                       auto next_wp1 = getXY(car_s + 60, (2 + 4 * car_state->lane_), map_waypoints_s, map_waypoints_x,
@@ -346,16 +389,16 @@ int main()
 
                       tk::spline s;
                       s.set_points(ptsx, ptsy);
-
-
                       vector<double> next_x_vals;
                       vector<double> next_y_vals;
 
+                      //We are using previous path to ensure the smooth transition
                       for (int i = 0; i < previous_path_x.size(); i++)
                       {
                         next_x_vals.push_back(previous_path_x[i]);
                         next_y_vals.push_back(previous_path_y[i]);
                       }
+
 
                       double target_x = 30;
                       double target_y = s(target_x);
@@ -363,10 +406,9 @@ int main()
                       double target_dist = sqrt(target_x * target_x + target_y * target_y);
                       double x_add_on = 0;
 
+                      double N = target_dist / (0.02 * ref_vel / 2.24); // 2.24-> mph to m/sec 0.02 -> timestamp
                       for (int i = 1; i <= 50 - previous_path_x.size(); i++)
                       {
-
-                        double N = target_dist / (0.02 * ref_vel / 2.24); //mph to m/sec
                         double x_point = x_add_on + target_x / N;
                         double y_point = s(x_point);
                         x_add_on = x_point;
@@ -374,7 +416,7 @@ int main()
                         double x_ref = x_point;
                         double y_ref = y_point;
 
-                        //come back to normal afterrotating it co car coordinate before
+                        //come back to normal after rotating it car coordinate before
                         x_point = x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw);
                         y_point = x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw);
                         x_point += ref_x;
